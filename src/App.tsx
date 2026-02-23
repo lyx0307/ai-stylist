@@ -66,7 +66,7 @@ export default function App() {
   return (
     <Layout currentView={currentView} setCurrentView={setCurrentView} onLogout={handleLogout}>
       {currentView === 'home' && <Home onNavigateToStyling={() => setCurrentView('styling')} onAddToCart={handleAddToCart} />}
-      {currentView === 'styling' && <Styling />}
+      {currentView === 'styling' && <Styling onAddToCart={handleAddToCart} />}
       {currentView === 'profile' && (
         <Profile
           userProfile={userProfile}

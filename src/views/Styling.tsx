@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from 'motion/react';
 import { Send, ThumbsUp, ThumbsDown, X, Heart, MoreHorizontal, ShoppingBag, ArrowUp, Sparkles as LucideSparkles, RefreshCw } from 'lucide-react';
 import { cn } from '../components/Layout';
+import { ProductModal } from '../components/ProductModal';
 import { api } from '../api';
 
 // Mock Data
@@ -80,7 +81,11 @@ const RECOMMENDED_PRODUCTS = [
   }
 ];
 
-export function Styling() {
+interface StylingProps {
+  onAddToCart?: (product: any, color: string, size: string) => void;
+}
+
+export function Styling({ onAddToCart }: StylingProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [viewMode, setViewMode] = useState<'chat' | 'swipe' | 'results'>('chat');
@@ -426,71 +431,18 @@ export function Styling() {
           </AnimatePresence>
         </div>
 
-        {/* Product Detail Sidebar (Overlay) */}
+        {/* Product Detail Modal */}
         <AnimatePresence>
           {selectedProduct && (
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute top-0 right-0 w-full md:w-[400px] h-full bg-white shadow-2xl border-l border-gray-100 overflow-y-auto z-20"
-            >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="font-bold text-lg">商品详情</h2>
-                  <button
-                    onClick={() => setSelectedProduct(null)}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                <div className="aspect-[3/4] rounded-2xl overflow-hidden mb-6 bg-gray-100">
-                  <img src={selectedProduct.image} alt={selectedProduct.name} className="w-full h-full object-cover" />
-                </div>
-
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h1 className="text-2xl font-bold text-gray-900">{selectedProduct.name}</h1>
-                      <span className="text-2xl font-bold text-gray-900">{selectedProduct.price}</span>
-                    </div>
-                    <p className="text-sm text-gray-500 leading-relaxed">
-                      {selectedProduct.description}
-                    </p>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">颜色</h3>
-                    <div className="flex gap-3">
-                      <button className="w-8 h-8 rounded-full bg-[#D2B48C] ring-2 ring-offset-2 ring-blue-600"></button>
-                      <button className="w-8 h-8 rounded-full bg-black ring-1 ring-gray-200"></button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-medium text-gray-900">尺码</h3>
-                      <button className="text-xs text-blue-600 hover:underline">尺码指南</button>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <button className="py-2 border border-gray-200 rounded-lg text-sm font-medium hover:border-gray-900 transition-colors">S</button>
-                      <button className="py-2 border-2 border-blue-600 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium">M</button>
-                      <button className="py-2 border border-gray-200 rounded-lg text-sm font-medium hover:border-gray-900 transition-colors">L</button>
-                    </div>
-                  </div>
-
-                  <button className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-200">
-                    <ShoppingBag size={20} />
-                    确认加入购物车
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+            <ProductModal
+              product={selectedProduct}
+              onClose={() => setSelectedProduct(null)}
+              isLiked={false}
+              onAddToCart={onAddToCart}
+            />
           )}
         </AnimatePresence>
+
       </div>
     </div>
   );
