@@ -6,7 +6,7 @@ import { ProductModal } from '../components/ProductModal';
 import { CATEGORIES } from '../data';
 import { api } from '../api';
 
-export function Home({ onNavigateToStyling }: { onNavigateToStyling?: () => void }) {
+export function Home({ onNavigateToStyling, onAddToCart }: { onNavigateToStyling?: () => void, onAddToCart?: (product: any, color: string, size: string) => void }) {
   const [activeCategory, setActiveCategory] = useState("为你推荐");
   const [likedProducts, setLikedProducts] = useState<number[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
@@ -156,6 +156,7 @@ export function Home({ onNavigateToStyling }: { onNavigateToStyling?: () => void
             product={selectedProduct}
             onClose={() => setSelectedProduct(null)}
             isLiked={likedProducts.includes(selectedProduct.id)}
+            onAddToCart={onAddToCart}
           />
         )}
       </AnimatePresence>

@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect } from 'react';
-import { Settings, CreditCard, Package, Truck, RefreshCw, Filter, Plus, Heart, ArrowLeft, Sparkles, User, X } from 'lucide-react';
+import { Settings, CreditCard, Package, Truck, RefreshCw, Filter, Plus, Heart, ArrowLeft, Sparkles, User, X, ShoppingBag } from 'lucide-react';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { cn } from '../components/Layout';
 import { ProductModal } from '../components/ProductModal';
@@ -94,9 +94,12 @@ type ViewState = 'main' | 'orders' | 'inspiration';
 interface ProfileProps {
   userProfile: UserProfile;
   setUserProfile: (profile: UserProfile) => void;
+  cartItems?: any[];
+  onAddToCart?: (product: any, color: string, size: string) => void;
+  onRemoveFromCart?: (id: number) => void;
 }
 
-export function Profile({ userProfile, setUserProfile }: ProfileProps) {
+export function Profile({ userProfile, setUserProfile, cartItems = [], onAddToCart, onRemoveFromCart }: ProfileProps) {
   const [viewState, setViewState] = useState<ViewState>('main');
   const [selectedOrderType, setSelectedOrderType] = useState<string | null>(null);
   const [selectedInspiration, setSelectedInspiration] = useState<any | null>(null);
@@ -315,6 +318,65 @@ export function Profile({ userProfile, setUserProfile }: ProfileProps) {
                 </div>
               </div>
 
+              {/* Shopping Cart */}
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold text-gray-900">购物车</h2>
+                    <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded">{cartItems.length}</span>
+                  </div>
+                </div>
+
+                {cartItems.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-8 text-center text-gray-400 font-medium shadow-sm">
+                    <ShoppingBag className="mx-auto mb-3 opacity-50" size={32} />
+                    购物车空空如也，快去挑点喜欢的单品吧！
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
+                    <AnimatePresence mode="popLayout">
+                      {cartItems.map(item => (
+                        <motion.div
+                          key={item.cartItemId}
+                          layout
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className="flex items-center gap-4 p-3 border border-gray-100 rounded-xl hover:shadow-md transition-shadow relative group"
+                        >
+                          <img src={item.image} alt={item.name} className="w-20 h-24 object-cover rounded-lg bg-gray-50 shrink-0" />
+                          <div className="flex-1">
+                            <h3 className="font-bold text-gray-900 line-clamp-1">{item.name}</h3>
+                            <p className="text-sm text-gray-500 mt-1">颜色: {item.selectedColor} | 尺码: {item.selectedSize}</p>
+                            <p className="text-blue-600 font-bold mt-2">{item.price}</p>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveFromCart?.(item.cartItemId);
+                            }}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <X size={20} />
+                          </button>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                    {cartItems.length > 0 && (
+                      <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                        <span className="text-gray-500 text-sm">共 {cartItems.length} 件商品</span>
+                        <button
+                          onClick={() => alert('此为演示项目，无真实付款流程。您喜爱的单品已保留在购物车中。')}
+                          className="bg-black text-white px-6 py-2 rounded-full font-bold hover:bg-gray-800 transition-colors shadow-md"
+                        >
+                          去结算
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Inspiration Wardrobe */}
               <div>
                 <div className="flex items-center justify-between mb-6">
@@ -495,6 +557,7 @@ export function Profile({ userProfile, setUserProfile }: ProfileProps) {
             product={selectedProduct}
             onClose={() => setSelectedProduct(null)}
             isLiked={true}
+            onAddToCart={onAddToCart}
           />
         )}
       </AnimatePresence>

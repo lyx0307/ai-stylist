@@ -21,6 +21,16 @@ export default function App() {
     weight: '48',
     isRegistered: false
   });
+  const [cartItems, setCartItems] = useState<any[]>([]);
+
+  const handleAddToCart = (product: any, color: string, size: string) => {
+    setCartItems(prev => [...prev, { ...product, cartItemId: Date.now(), selectedColor: color, selectedSize: size }]);
+    alert('已成功加入购物车！');
+  };
+
+  const handleRemoveFromCart = (cartItemId: number) => {
+    setCartItems(prev => prev.filter(item => item.cartItemId !== cartItemId));
+  };
 
   useEffect(() => {
     // Fetch mock user configuration from backend
@@ -55,12 +65,15 @@ export default function App() {
 
   return (
     <Layout currentView={currentView} setCurrentView={setCurrentView} onLogout={handleLogout}>
-      {currentView === 'home' && <Home onNavigateToStyling={() => setCurrentView('styling')} />}
+      {currentView === 'home' && <Home onNavigateToStyling={() => setCurrentView('styling')} onAddToCart={handleAddToCart} />}
       {currentView === 'styling' && <Styling />}
       {currentView === 'profile' && (
         <Profile
           userProfile={userProfile}
           setUserProfile={setUserProfile}
+          cartItems={cartItems}
+          onAddToCart={handleAddToCart}
+          onRemoveFromCart={handleRemoveFromCart}
         />
       )}
     </Layout>
