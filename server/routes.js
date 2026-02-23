@@ -1,0 +1,265 @@
+import express from 'express';
+import { supabase } from './supabaseClient.js';
+import OpenAI from 'openai';
+
+const router = express.Router();
+
+const openai = new OpenAI({
+    apiKey: process.env.DASHSCOPE_API_KEY,
+    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+});
+
+// ----------------------------------------------------------------------
+// PRODUCTS
+// ----------------------------------------------------------------------
+router.get('/products', async (req, res) => {
+    try {
+        const { data, error } = await supabase.from('products').select('*').order('id', { ascending: true });
+        if (error) throw error;
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ----------------------------------------------------------------------
+// USER CONFIG
+// ----------------------------------------------------------------------
+router.get('/user', async (req, res) => {
+    try {
+        const { data, error } = await supabase.from('users').select('*').limit(1).single();
+        if (error && error.code !== 'PGRST116') throw error; // PGRST116 means no rows found
+        res.json(data || null);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.put('/user', async (req, res) => {
+    try {
+        const { id, name, height, weight, is_registered } = req.body;
+        let result;
+        if (id) {
+            result = await supabase.from('users').update({ name, height, weight, is_registered }).eq('id', id).select().single();
+        } else {
+            // Insert if no ID provided (basic mock approach)
+            result = await supabase.from('users').insert([{ name, height, weight, is_registered }]).select().single();
+        }
+        if (result.error) throw result.error;
+        res.json(result.data);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ----------------------------------------------------------------------
+// FAVORITES (Inspiration Wardrobe)
+// ----------------------------------------------------------------------
+router.get('/favorites', async (req, res) => {
+    try {
+        // Get favorites with user_id... ignoring user auth for now mock one
+        const { data: users, error: userError } = await supabase.from('users').select('id').limit(1).single();
+        if (userError && userError.code !== 'PGRST116') throw userError;
+        const userId = users ? users.id : null;
+
+        if (!userId) return res.json([]);
+
+        const { data, error } = await supabase
+            .from('favorites')
+            .select(`
+        *,
+        favorite_items (
+           products (*)
+        )
+      `)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Format to match frontend structure
+        const formattedData = data.map(fav => ({
+            id: fav.id,
+            title: fav.title,
+            image: fav.image,
+            timestamp: new Date(fav.created_at).getTime(),
+            date: new Date(fav.created_at).toLocaleDateString(),
+            items: fav.favorite_items.map(fi => fi.products).filter(Boolean)
+        }));
+
+        res.json(formattedData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/favorites', async (req, res) => {
+    try {
+        const { title, image, product_ids } = req.body;
+
+        // Get mock user
+        const { data: users } = await supabase.from('users').select('id').limit(1).single();
+        const userId = users ? users.id : null;
+
+        // Insert favorite
+        const { data: favData, error: favError } = await supabase
+            .from('favorites')
+            .insert([{ user_id: userId, title, image }])
+            .select()
+            .single();
+
+        if (favError) throw favError;
+
+        // Insert favorite items if provided
+        if (product_ids && product_ids.length > 0) {
+            const itemsToInsert = product_ids.map(pid => ({ favorite_id: favData.id, product_id: pid }));
+            const { error: itemsError } = await supabase.from('favorite_items').insert(itemsToInsert);
+            if (itemsError) throw itemsError;
+        }
+
+        res.json({ success: true, id: favData.id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Add item to existing favorite
+router.post('/favorites/:id/items', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { product_id } = req.body;
+        const { data, error } = await supabase
+            .from('favorite_items')
+            .insert([{ favorite_id: parseInt(id), product_id }]);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete('/favorites/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase.from('favorites').delete().eq('id', parseInt(id));
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Remove item from favorite
+router.delete('/favorites/:id/items/:product_id', async (req, res) => {
+    try {
+        const { id, product_id } = req.params;
+        const { error } = await supabase
+            .from('favorite_items')
+            .delete()
+            .match({ favorite_id: parseInt(id), product_id: parseInt(product_id) });
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// ----------------------------------------------------------------------
+// CHAT HISTORY
+// ----------------------------------------------------------------------
+router.get('/chat', async (req, res) => {
+    try {
+        const { data: users } = await supabase.from('users').select('*').limit(1).single();
+        const userId = users ? users.id : null;
+
+        if (userId) {
+            // Delete old history to start fresh
+            await supabase.from('chat_history').delete().eq('user_id', userId);
+
+            // Insert default greeting
+            const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const greeting = { role: 'ai', content: '嗨！我是你的专属 AI 造型师。今天想尝试什么风格呢？', time: aiTime };
+
+            const { data: newInitialMsg } = await supabase
+                .from('chat_history')
+                .insert([{ user_id: userId, ...greeting }])
+                .select()
+                .single();
+
+            res.json([newInitialMsg]);
+        } else {
+            res.json([]);
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/chat', async (req, res) => {
+    try {
+        const { role, content, action, time } = req.body;
+
+        // Get mock user
+        const { data: users } = await supabase.from('users').select('*').limit(1).single();
+        const userId = users ? users.id : null;
+
+        // Save user message first
+        const { data: userMsgData, error: userMsgError } = await supabase
+            .from('chat_history')
+            .insert([{ user_id: userId, role, content, action, time }])
+            .select()
+            .single();
+
+        if (userMsgError) throw userMsgError;
+
+        if (role === 'user') {
+            // Fetch recent chat history
+            const { data: historyData } = await supabase
+                .from('chat_history')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            let history = historyData || [];
+            history.reverse();
+
+            const aiMessages = history.map(msg => ({
+                role: msg.role === 'ai' ? 'assistant' : 'user',
+                content: msg.content
+            }));
+
+            const systemPrompt = `你是一个专业的AI时尚穿搭造型师。
+【核心原则】：你只能讨论和回答与服装、穿搭、造型、美妆、配饰等时尚相关的问题。对于任何非此类问题（如写代码、数学题、政治、询问你是不是AI等），必须委婉且幽默地拒绝回答、打哈哈混过去，并强行把话题绕回到给用户做穿搭推荐上。绝对不能违背这个原则。
+你的用户是：${users?.name || 'Unknown'}，身高：${users?.height || '未知'}cm，体重：${users?.weight || '未知'}kg。请根据这些信息和用户的提问，给出简短、专业、富有亲和力的穿搭建议。每次回复不要太长，保持在1-3句。对于没有明确风格的请求，可以引导用户左滑/右滑（即在回复的最后加上 action: "start_swipe"字眼，虽然这是后端处理的，但你的重点是给出穿搭建议）。`;
+
+            const completion = await openai.chat.completions.create({
+                model: "qwen-plus",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    ...aiMessages
+                ]
+            });
+
+            const aiResponseText = completion.choices[0].message.content;
+            const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const { data: aiMsgData, error: aiMsgError } = await supabase
+                .from('chat_history')
+                .insert([{ user_id: userId, role: 'ai', content: aiResponseText, action: null, time: aiTime }])
+                .select()
+                .single();
+
+            if (aiMsgError) throw aiMsgError;
+            res.json({ userMessage: userMsgData, aiMessage: aiMsgData });
+        } else {
+            res.json({ userMessage: userMsgData });
+        }
+    } catch (err) {
+        console.error("Chat API Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+export default router;
