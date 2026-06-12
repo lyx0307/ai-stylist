@@ -225,29 +225,43 @@ router.post('/chat', async (req, res) => {
             let history = historyData || [];
             history.reverse();
 
-            const aiMessages = history.map(msg => ({
-                role: msg.role === 'ai' ? 'assistant' : 'user',
-                content: msg.content
-            }));
+            const aiMessages = history.map(msg => {
+                let cleanContent = msg.content || "";
+                cleanContent = cleanContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
+                return {
+                    role: msg.role === 'ai' ? 'assistant' : 'user',
+                    content: cleanContent
+                };
+            });
 
             const systemPrompt = `你是一个专业的AI时尚穿搭造型师。
 【核心原则】：你只能讨论和回答与服装、穿搭、造型、美妆、配饰等时尚相关的问题。对于任何非此类问题（如写代码、数学题、政治、询问你是不是AI等），必须委婉且幽默地拒绝回答、打哈哈混过去，并强行把话题绕回到给用户做穿搭推荐上。绝对不能违背这个原则。
 你的用户是：${users?.name || 'Unknown'}，身高：${users?.height || '未知'}cm，体重：${users?.weight || '未知'}kg。请根据这些信息和用户的提问，给出简短、专业、富有亲和力的穿搭建议。每次回复不要太长，保持在1-3句。对于没有明确风格的请求，可以引导用户左滑/右滑（即在回复的最后加上 action: "start_swipe"字眼，虽然这是后端处理的，但你的重点是给出穿搭建议）。`;
 
             const completion = await openai.chat.completions.create({
-                model: "qwen-plus",
+                model: "qwen3.7-plus",
                 messages: [
                     { role: "system", content: systemPrompt },
                     ...aiMessages
-                ]
+                ],
+                extra_body: {
+                    enable_thinking: true
+                }
             });
 
             const aiResponseText = completion.choices[0].message.content;
+            const reasoningContent = completion.choices[0].message.reasoning_content;
+
+            let finalContent = aiResponseText;
+            if (reasoningContent) {
+                finalContent = `<thinking>${reasoningContent}</thinking>${aiResponseText}`;
+            }
+
             const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             const { data: aiMsgData, error: aiMsgError } = await supabase
                 .from('chat_history')
-                .insert([{ user_id: userId, role: 'ai', content: aiResponseText, action: null, time: aiTime }])
+                .insert([{ user_id: userId, role: 'ai', content: finalContent, action: null, time: aiTime }])
                 .select()
                 .single();
 

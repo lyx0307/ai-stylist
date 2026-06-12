@@ -81,6 +81,44 @@ const RECOMMENDED_PRODUCTS = [
   }
 ];
 
+function ChatMessageContent({ msg }: { msg: any }) {
+  const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
+
+  if (msg.isLoading) {
+    return <span>{msg.content}</span>;
+  }
+
+  const content = msg.content || "";
+  const thinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/);
+
+  if (thinkingMatch) {
+    const thinkingText = thinkingMatch[1].trim();
+    const displayText = content.replace(/<thinking>[\s\S]*?<\/thinking>/, "").trim();
+
+    return (
+      <div className="space-y-2">
+        <div className="rounded-xl bg-black/5 p-2.5 text-xs border border-black/10 text-gray-500">
+          <button
+            onClick={() => setIsThinkingExpanded(!isThinkingExpanded)}
+            className="flex items-center gap-1.5 font-medium text-gray-600 hover:text-gray-900 transition-colors w-full text-left cursor-pointer"
+          >
+            <LucideSparkles size={12} className="text-purple-500 animate-pulse animate-duration-1000" />
+            <span>{isThinkingExpanded ? "收起思考过程" : "查看思考过程..."}</span>
+          </button>
+          {isThinkingExpanded && (
+            <div className="mt-2 pt-2 border-t border-black/5 whitespace-pre-wrap font-mono leading-relaxed select-all max-h-60 overflow-y-auto">
+              {thinkingText}
+            </div>
+          )}
+        </div>
+        <div className="whitespace-pre-wrap">{displayText}</div>
+      </div>
+    );
+  }
+
+  return <div className="whitespace-pre-wrap">{content}</div>;
+}
+
 interface StylingProps {
   onAddToCart?: (product: any, color: string, size: string) => void;
 }
@@ -251,7 +289,7 @@ export function Styling({ onAddToCart }: StylingProps) {
                   : "bg-gray-100 text-gray-800 rounded-tl-none",
                 msg.isLoading ? "animate-pulse" : ""
               )}>
-                {msg.content}
+                <ChatMessageContent msg={msg} />
               </div>
             </div>
           ))}
