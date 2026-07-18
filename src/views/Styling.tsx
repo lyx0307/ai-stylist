@@ -150,7 +150,12 @@ export function Styling({ products, onAddToCart }: StylingProps) {
       if (viewMode === 'sub_style_swipe') {
           // Transition to product swipe
           const subStylesToUse = direction === 'right' ? [...likedSubStyles, currentCard.name] : likedSubStyles;
-          const filterTags = subStylesToUse.length > 0 ? subStylesToUse : Array.from(new Set(products.filter(p => p.category === currentIntent?.main_style).map(p => p.tag)));
+          const filterTags = subStylesToUse.length > 0 ? subStylesToUse : Array.from(new Set(products.filter(p => {
+              if (Array.isArray(p.category)) {
+                  return p.category.includes(currentIntent?.main_style);
+              }
+              return p.category === currentIntent?.main_style;
+          }).map(p => p.tag)));
           const targetGender = currentIntent?.target_gender || '男士';
           
           let prodCards = products.filter(p => filterTags.includes(p.tag) && p.name.includes(targetGender));
@@ -214,12 +219,14 @@ export function Styling({ products, onAddToCart }: StylingProps) {
       let aiContent = response.aiMessage ? response.aiMessage.content : '';
       
       let intent = null;
-      const jsonMatch = aiContent.match(/```json\n([\s\S]*?)\n```/);
+      const jsonMatch = aiContent.match(/```json\s*([\s\S]*?)\s*```/i);
       if (jsonMatch) {
           try {
               intent = JSON.parse(jsonMatch[1]);
-              aiContent = aiContent.replace(/```json\n[\s\S]*?\n```/, '').trim();
-          } catch(e) {}
+              aiContent = aiContent.replace(/```json\s*[\s\S]*?\s*```/i, '').trim();
+          } catch(e) {
+              console.error("Failed to parse AI intent JSON:", e);
+          }
       }
 
       // Cleanup legacy prompt
@@ -236,7 +243,16 @@ export function Styling({ products, onAddToCart }: StylingProps) {
       if (intent && intent.main_style) {
           setCurrentIntent(intent);
           
-          const subStyleTags = Array.from(new Set(products.filter(p => p.category === intent.main_style).map(p => p.tag)));
+          const subStyleTags = Array.from(new Set(
+              products
+                  .filter(p => {
+                      if (Array.isArray(p.category)) {
+                          return p.category.includes(intent.main_style);
+                      }
+                      return p.category === intent.main_style;
+                  })
+                  .map(p => p.tag)
+          ));
           if (subStyleTags.length > 0) {
               const cards = subStyleTags.map(tag => {
                   const firstProduct = products.find(p => p.tag === tag);
