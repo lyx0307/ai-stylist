@@ -37,7 +37,11 @@ function ChatMessageContent({ msg }: { msg: any }) {
     return <span>{msg.content}</span>;
   }
 
-  const content = msg.content || "";
+  let content = msg.content || "";
+  
+  // Clean up JSON block from display
+  content = content.replace(/```json\s*[\s\S]*?\s*```/ig, '').trim();
+  
   const thinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/);
 
   if (thinkingMatch) {
@@ -76,7 +80,7 @@ interface StylingProps {
 export function Styling({ products, onAddToCart }: StylingProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [viewMode, setViewMode] = useState<'chat' | 'sub_style_swipe' | 'product_swipe' | 'results'>('chat');
+  const [viewMode, setViewMode] = useState<'chat' | 'sub_style_swipe' | 'product_selection' | 'results'>('chat');
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   
   const [swipeIndex, setSwipeIndex] = useState(0);
@@ -139,8 +143,6 @@ export function Styling({ products, onAddToCart }: StylingProps) {
     } else {
         if (viewMode === 'sub_style_swipe') {
             api.savePreference({ type: 'sub_style_dislike', value: currentCard.name, context: 'AI Styling' }).catch(console.error);
-        } else if (viewMode === 'product_swipe') {
-            api.savePreference({ type: 'product_dislike', value: currentCard.id.toString(), context: 'AI Styling' }).catch(console.error);
         }
     }
 
@@ -148,7 +150,7 @@ export function Styling({ products, onAddToCart }: StylingProps) {
       setSwipeIndex(prev => prev + 1);
     } else {
       if (viewMode === 'sub_style_swipe') {
-          // Transition to product swipe
+          // Transition to product selection
           const subStylesToUse = direction === 'right' ? [...likedSubStyles, currentCard.name] : likedSubStyles;
           const filterTags = subStylesToUse.length > 0 ? subStylesToUse : Array.from(new Set(products.filter(p => {
               if (Array.isArray(p.category)) {
@@ -159,33 +161,15 @@ export function Styling({ products, onAddToCart }: StylingProps) {
           const targetGender = currentIntent?.target_gender || '男士';
           
           let prodCards = products.filter(p => filterTags.includes(p.tag) && p.name.includes(targetGender));
-          prodCards = shuffleProducts(prodCards).slice(0, 5); // Limit to 5 products for swipe
+          prodCards = shuffleProducts(prodCards).slice(0, 10); // Limit to 10 products for selection list
           
           if (prodCards.length === 0) {
               // Fallback if no exact match
-              prodCards = shuffleProducts(products).slice(0, 5);
+              prodCards = shuffleProducts(products).slice(0, 10);
           }
           
           setSwipeCards(prodCards);
-          setSwipeIndex(0);
-          setViewMode('product_swipe');
-      } else {
-          // End of product swipe, show results
-          setViewMode('results');
-          const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          const msgData = {
-            role: 'ai',
-            content: '收到你的喜好偏好啦！根据你刚才右滑的单品，这是为你精准匹配的最佳组合推荐。',
-            time,
-            action: 'show_results'
-          };
-
-          const loadingId = Date.now();
-          setMessages(prev => [...prev, { id: loadingId, role: 'ai', content: 'AI 正在生成专属推荐...', isLoading: true }]);
-
-          api.sendChatMessage(msgData).then(saved => {
-            setMessages(prev => prev.map(m => m.id === loadingId ? saved : m));
-          }).catch(console.error);
+          setViewMode('product_selection');
       }
     }
   };
@@ -387,7 +371,7 @@ export function Styling({ products, onAddToCart }: StylingProps) {
         {/* Main View (Swipe or Grid) */}
         <div className="flex-1 overflow-y-auto p-8 flex flex-col items-center justify-center min-h-full">
           <AnimatePresence mode="wait">
-            {(viewMode === 'sub_style_swipe' || viewMode === 'product_swipe') && swipeCards.length > 0 && (
+            {viewMode === 'sub_style_swipe' && swipeCards.length > 0 && (
               <motion.div
                 key="swipe"
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -396,7 +380,7 @@ export function Styling({ products, onAddToCart }: StylingProps) {
                 className="relative w-full max-w-md aspect-[3/4]"
               >
                 <div className="absolute top-[-40px] left-0 w-full text-center text-gray-500 font-medium tracking-widest text-sm uppercase">
-                    {viewMode === 'sub_style_swipe' ? '1/2 探索风格偏好' : '2/2 挑选具体单品'}
+                    1/2 探索风格偏好
                 </div>
                 
                 <div className="absolute inset-0 bg-gray-200 rounded-3xl transform rotate-3 scale-95 opacity-50" />
@@ -455,6 +439,86 @@ export function Styling({ products, onAddToCart }: StylingProps) {
                   >
                     <Heart size={32} fill="currentColor" />
                   </button>
+                </div>
+              </motion.div>
+            )}
+
+            {viewMode === 'product_selection' && swipeCards.length > 0 && (
+              <motion.div
+                key="selection"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full h-full flex flex-col max-w-3xl"
+              >
+                <div className="flex items-center justify-between mb-6 shrink-0">
+                  <h2 className="text-lg font-bold text-gray-900">2/2 挑选具体单品 <span className="text-gray-400 font-normal text-sm ml-2">请勾选你喜欢的单品</span></h2>
+                </div>
+                <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 pr-2">
+                  {swipeCards.map((product) => {
+                    const isSelected = likedProducts.some(p => p.id === product.id);
+                    return (
+                        <div
+                          key={product.id}
+                          onClick={() => {
+                              if (isSelected) {
+                                  setLikedProducts(prev => prev.filter(p => p.id !== product.id));
+                              } else {
+                                  setLikedProducts(prev => [...prev, product]);
+                              }
+                          }}
+                          className={cn(
+                            "bg-white rounded-xl p-3 shadow-sm cursor-pointer transition-all border-2 flex items-center gap-4",
+                            isSelected ? "border-blue-600 ring-2 ring-blue-50 bg-blue-50/30" : "border-transparent hover:border-gray-200"
+                          )}
+                        >
+                          <div className="w-20 h-24 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+                            <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-900 text-sm line-clamp-2">{product.name}</h3>
+                            <p className="text-xs text-gray-500 mt-1">{product.tag}</p>
+                            <p className="text-sm font-bold text-gray-900 mt-2">{product.price}</p>
+                          </div>
+                          <div className={cn(
+                              "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0",
+                              isSelected ? "bg-blue-600 border-blue-600 text-white" : "border-gray-300"
+                          )}>
+                              {isSelected && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                          </div>
+                        </div>
+                    );
+                  })}
+                </div>
+                <div className="shrink-0 pt-4 mt-2 border-t border-gray-100 flex justify-end">
+                    <button
+                        onClick={() => {
+                            // Save preferences
+                            likedProducts.forEach(p => {
+                                api.savePreference({ type: 'product_like', value: p.id.toString(), context: currentIntent?.context || 'AI Styling' }).catch(console.error);
+                            });
+                            
+                            // Trigger results
+                            setViewMode('results');
+                            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            const msgData = {
+                              role: 'ai',
+                              content: '收到你的挑选偏好啦！这是为你精准匹配的最佳组合推荐。',
+                              time,
+                              action: 'show_results'
+                            };
+
+                            const loadingId = Date.now();
+                            setMessages(prev => [...prev, { id: loadingId, role: 'ai', content: 'AI 正在生成专属推荐...', isLoading: true }]);
+
+                            api.sendChatMessage(msgData).then(saved => {
+                              setMessages(prev => prev.map(m => m.id === loadingId ? saved : m));
+                            }).catch(console.error);
+                        }}
+                        className="bg-blue-600 text-white px-8 py-3 rounded-full font-medium hover:bg-blue-700 shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={likedProducts.length === 0}
+                    >
+                        完成挑选 ({likedProducts.length})
+                    </button>
                 </div>
               </motion.div>
             )}
