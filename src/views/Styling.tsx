@@ -39,23 +39,16 @@ function ChatMessageContent({ msg }: { msg: any }) {
 
   let content = msg.content || "";
   
-  // Clean up JSON block from display
-  const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
-  let blockToReplace = codeBlockMatch ? codeBlockMatch[0] : null;
-  if (!blockToReplace) {
-      const fallbackMatch = content.match(/(\{\s*"target_gender"[\s\S]*?\})/i);
-      if (fallbackMatch) blockToReplace = fallbackMatch[0];
-  }
-  if (blockToReplace) {
-      content = content.replace(blockToReplace, '').trim();
-      content = content.replace(/\d+\.?\s*JSON.*?$/img, '').trim();
-  }
+  // Clean up ALL JSON blocks from display
+  content = content.replace(/```(?:json)?\s*\{[\s\S]*?\}\s*```/ig, '').trim();
+  content = content.replace(/\{\s*"target_gender"[\s\S]*?"main_style"[\s\S]*?\}/ig, '').trim();
+  content = content.replace(/\d+\.?\s*JSON.*?$/img, '').trim();
   
-  const thinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/);
+  const thinkingMatch = content.match(/<thinking>([\s\S]*?)(?:<\/thinking>|$)/);
 
   if (thinkingMatch) {
     const thinkingText = thinkingMatch[1].trim();
-    const displayText = content.replace(/<thinking>[\s\S]*?<\/thinking>/, "").trim();
+    const displayText = content.replace(/<thinking>[\s\S]*?(?:<\/thinking>|$)/, "").trim();
 
     return (
       <div className="space-y-2">
@@ -123,6 +116,60 @@ export function Styling({ products, onAddToCart }: StylingProps) {
       }
     }).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (products.length === 0 || messages.length === 0) return;
+    // Only restore state if we are still in chat mode
+    if (viewMode !== 'chat') return;
+    
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.role === 'ai') {
+        const aiContent = lastMsg.content || '';
+        const codeBlockMatch = aiContent.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+        let jsonStr = null;
+        if (codeBlockMatch) {
+            jsonStr = codeBlockMatch[1];
+        } else {
+            const fallbackMatch = aiContent.match(/(\{\s*"target_gender"[\s\S]*?\})/i);
+            if (fallbackMatch) jsonStr = fallbackMatch[1];
+        }
+        if (jsonStr) {
+            try {
+                const intent = JSON.parse(jsonStr);
+                if (intent && intent.main_style) {
+                    setCurrentIntent(intent);
+                    const subStyleTags = Array.from(new Set(
+                        products
+                            .filter(p => {
+                                if (Array.isArray(p.category)) {
+                                    return p.category.includes(intent.main_style);
+                                }
+                                return p.category === intent.main_style;
+                            })
+                            .map(p => p.tag)
+                    ));
+                    if (subStyleTags.length > 0) {
+                        const cards = subStyleTags.map(tag => {
+                            const firstProduct = products.find(p => p.tag === tag);
+                            return {
+                                id: tag,
+                                name: tag,
+                                image: firstProduct?.image,
+                                isSubStyle: true
+                            };
+                        });
+                        
+                        setSwipeCards(cards);
+                        setSwipeIndex(0);
+                        setLikedSubStyles([]);
+                        setLikedProducts([]);
+                        setViewMode('sub_style_swipe');
+                    }
+                }
+            } catch(e) {}
+        }
+    }
+  }, [messages, products, viewMode]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
