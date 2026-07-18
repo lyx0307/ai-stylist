@@ -71,18 +71,18 @@ export default function App() {
 
   return (
     <Layout currentView={currentView} setCurrentView={setCurrentView} onLogout={handleLogout}>
-      {currentView === 'home' && (
+      <div className={currentView === 'home' ? 'block' : 'hidden'} style={{ height: '100%' }}>
         <Home
           products={products}
           productsLoading={productsLoading}
           onNavigateToStyling={() => setCurrentView('styling')}
           onAddToCart={handleAddToCart}
         />
-      )}
-      {currentView === 'styling' && (
+      </div>
+      <div className={currentView === 'styling' ? 'block' : 'hidden'} style={{ height: '100%' }}>
         <Styling products={products} onAddToCart={handleAddToCart} />
-      )}
-      {currentView === 'profile' && (
+      </div>
+      <div className={currentView === 'profile' ? 'block' : 'hidden'} style={{ height: '100%' }}>
         <Profile
           products={products}
           userProfile={userProfile}
@@ -91,7 +91,7 @@ export default function App() {
           onAddToCart={handleAddToCart}
           onRemoveFromCart={handleRemoveFromCart}
         />
-      )}
+      </div>
     </Layout>
   );
 }
