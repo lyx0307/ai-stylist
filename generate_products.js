@@ -46,7 +46,27 @@ function generateRandomProduct(category, index) {
 
     const kwList = imageKeywords[category] || ["fashion"];
     const kw = kwList[Math.floor(Math.random() * kwList.length)];
-    const image = `https://source.unsplash.com/800x1200/?${kw}&sig=${index}`; // Unsplash source api with sig to avoid caching duplicates
+    // Fallback prompt based on keywords, but we should actually use the noun
+    const nounPrompts = {
+        "风衣": "fashion photography of a stylish women trench coat",
+        "西服套装": "fashion photography of an elegant suit",
+        "直筒裤": "fashion photography of stylish straight pants trousers",
+        "连衣裙": "fashion photography of a beautiful elegant dress",
+        "卫衣": "fashion photography of a trendy hoodie",
+        "夹克": "fashion photography of a cool fashion jacket",
+        "托特包": "fashion photography of a stylish tote bag",
+        "单肩包": "fashion photography of a stylish shoulder bag",
+        "运动鞋": "fashion photography of trendy sneakers shoes",
+        "乐福鞋": "fashion photography of elegant leather loafers shoes",
+        "针织衫": "fashion photography of a cozy knitwear sweater",
+        "半身裙": "fashion photography of a stylish skirt",
+        "大衣": "fashion photography of a stylish winter coat",
+        "围巾": "fashion photography of a stylish scarf",
+        "帽子": "fashion photography of a stylish hat"
+    };
+    const prompt = nounPrompts[noun] || `fashion photography of a stylish ${kw}`;
+    const promptEncoded = encodeURIComponent(prompt);
+    const image = `https://image.pollinations.ai/prompt/${promptEncoded}?width=800&height=1200&nologo=true&seed=${index}`;
 
     const pTags = ["NEW", "HOT", "AI PICK", null, null, null];
     const tag = pTags[Math.floor(Math.random() * pTags.length)];
