@@ -138,19 +138,35 @@ export function Styling({ products, onAddToCart }: StylingProps) {
                 const intent = JSON.parse(jsonStr);
                 if (intent && intent.main_style) {
                     setCurrentIntent(intent);
-                    const subStyleTags = Array.from(new Set(
-                        products
-                            .filter(p => {
-                                if (Array.isArray(p.category)) {
-                                    return p.category.includes(intent.main_style);
-                                }
-                                return p.category === intent.main_style;
-                            })
-                            .map(p => p.tag)
-                    ));
+                    const targetGender = intent.target_gender || '男士';
+                    const matchingProducts = products.filter(p => {
+                        if (Array.isArray(p.category)) {
+                            return p.category.includes(intent.main_style);
+                        }
+                        return p.category === intent.main_style;
+                    });
+
+                    if (intent.item_type && intent.item_type.trim() !== '') {
+                        const itemTypeMatches = matchingProducts.filter(p => 
+                            (p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type))
+                            && p.name.includes(targetGender)
+                        );
+                        if (itemTypeMatches.length === 0) {
+                            return; // Fallback handled in chat, do nothing here
+                        } else {
+                            const shuffled = [...itemTypeMatches].sort(() => 0.5 - Math.random());
+                            setSwipeCards(shuffled.slice(0, 10));
+                            setLikedProducts([]);
+                            setSwipeIndex(0);
+                            setViewMode('product_selection');
+                            return;
+                        }
+                    }
+
+                    const subStyleTags = Array.from(new Set(matchingProducts.map(p => p.tag)));
                     if (subStyleTags.length > 0) {
                         const cards = subStyleTags.map(tag => {
-                            const firstProduct = products.find(p => p.tag === tag);
+                            const firstProduct = matchingProducts.find(p => p.tag === tag);
                             return {
                                 id: tag,
                                 name: tag,
@@ -297,20 +313,43 @@ export function Styling({ products, onAddToCart }: StylingProps) {
 
       if (intent && intent.main_style) {
           setCurrentIntent(intent);
+          const targetGender = intent.target_gender || '男士';
+          const matchingProducts = products.filter(p => {
+              if (Array.isArray(p.category)) {
+                  return p.category.includes(intent.main_style);
+              }
+              return p.category === intent.main_style;
+          });
+
+          if (intent.item_type && intent.item_type.trim() !== '') {
+              const itemTypeMatches = matchingProducts.filter(p => 
+                  (p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type))
+                  && p.name.includes(targetGender)
+              );
+              if (itemTypeMatches.length === 0) {
+                  setTimeout(() => {
+                      const fallbackMsg = {
+                          role: 'ai',
+                          content: `【系统提示】：抱歉，在【${intent.main_style}】风格下暂时没有为您找到合适的【${intent.item_type}】。您可以看看该风格的其他推荐，或者尝试其他风格的单品！`,
+                          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      };
+                      api.sendChatMessage(fallbackMsg).then(saved => setMessages(prev => [...prev, saved]));
+                  }, 1500);
+                  return;
+              } else {
+                  const shuffled = [...itemTypeMatches].sort(() => 0.5 - Math.random());
+                  setSwipeCards(shuffled.slice(0, 10));
+                  setLikedProducts([]);
+                  setSwipeIndex(0);
+                  setTimeout(() => setViewMode('product_selection'), 1500);
+                  return;
+              }
+          }
           
-          const subStyleTags = Array.from(new Set(
-              products
-                  .filter(p => {
-                      if (Array.isArray(p.category)) {
-                          return p.category.includes(intent.main_style);
-                      }
-                      return p.category === intent.main_style;
-                  })
-                  .map(p => p.tag)
-          ));
+          const subStyleTags = Array.from(new Set(matchingProducts.map(p => p.tag)));
           if (subStyleTags.length > 0) {
               const cards = subStyleTags.map(tag => {
-                  const firstProduct = products.find(p => p.tag === tag);
+                  const firstProduct = matchingProducts.find(p => p.tag === tag);
                   return {
                       id: tag,
                       name: tag,
