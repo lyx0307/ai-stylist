@@ -140,25 +140,34 @@ export function Styling({ products, onAddToCart }: StylingProps) {
                     setCurrentIntent(intent);
                     const targetGender = intent.target_gender || '男士';
                     const matchingProducts = products.filter(p => {
-                        if (Array.isArray(p.category)) {
-                            return p.category.includes(intent.main_style);
-                        }
-                        return p.category === intent.main_style;
+                        const isMainStyle = Array.isArray(p.category) ? p.category.includes(intent.main_style) : p.category === intent.main_style;
+                        return isMainStyle && p.name.includes(targetGender);
                     });
 
                     if (intent.item_type && intent.item_type.trim() !== '') {
                         const itemTypeMatches = matchingProducts.filter(p => 
-                            (p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type))
-                            && p.name.includes(targetGender)
+                            p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type)
                         );
-                        if (itemTypeMatches.length === 0) {
+                        if (itemTypeMatches.length < 2) {
                             return; // Fallback handled in chat, do nothing here
                         } else {
-                            const shuffled = [...itemTypeMatches].sort(() => 0.5 - Math.random());
-                            setSwipeCards(shuffled.slice(0, 10));
-                            setLikedProducts([]);
+                            // User wants both steps, so extract subStyleTags ONLY from matched items
+                            const subStyleTags = Array.from(new Set(itemTypeMatches.map(p => p.tag)));
+                            const cards = subStyleTags.map(tag => {
+                                const firstProduct = itemTypeMatches.find(p => p.tag === tag);
+                                return {
+                                    id: tag,
+                                    name: tag,
+                                    image: firstProduct?.image,
+                                    isSubStyle: true
+                                };
+                            });
+                            
+                            setSwipeCards(cards);
                             setSwipeIndex(0);
-                            setViewMode('product_selection');
+                            setLikedSubStyles([]);
+                            setLikedProducts([]);
+                            setViewMode('sub_style_swipe');
                             return;
                         }
                     }
@@ -224,20 +233,31 @@ export function Styling({ products, onAddToCart }: StylingProps) {
       if (viewMode === 'sub_style_swipe') {
           // Transition to product selection
           const subStylesToUse = direction === 'right' ? [...likedSubStyles, currentCard.name] : likedSubStyles;
-          const filterTags = subStylesToUse.length > 0 ? subStylesToUse : Array.from(new Set(products.filter(p => {
-              if (Array.isArray(p.category)) {
-                  return p.category.includes(currentIntent?.main_style);
-              }
-              return p.category === currentIntent?.main_style;
-          }).map(p => p.tag)));
           const targetGender = currentIntent?.target_gender || '男士';
+          const filterTags = subStylesToUse.length > 0 ? subStylesToUse : Array.from(new Set(products.filter(p => {
+              const isMainStyle = Array.isArray(p.category) ? p.category.includes(currentIntent?.main_style) : p.category === currentIntent?.main_style;
+              return isMainStyle && p.name.includes(targetGender);
+          }).map(p => p.tag)));
           
           let prodCards = products.filter(p => filterTags.includes(p.tag) && p.name.includes(targetGender));
+          
+          if (currentIntent?.item_type && currentIntent.item_type.trim() !== '') {
+              const itemTypeMatches = prodCards.filter(p => 
+                  p.name.includes(currentIntent.item_type) || p.description.includes(currentIntent.item_type) || p.tag.includes(currentIntent.item_type)
+              );
+              if (itemTypeMatches.length > 0) prodCards = itemTypeMatches;
+          }
+          
           prodCards = shuffleProducts(prodCards).slice(0, 10); // Limit to 10 products for selection list
           
           if (prodCards.length === 0) {
               // Fallback if no exact match
-              prodCards = shuffleProducts(products).slice(0, 10);
+              let fallbackCards = products.filter(p => p.name.includes(targetGender));
+              if (currentIntent?.item_type && currentIntent.item_type.trim() !== '') {
+                  const specificFallback = fallbackCards.filter(p => p.name.includes(currentIntent.item_type) || p.description.includes(currentIntent.item_type) || p.tag.includes(currentIntent.item_type));
+                  if (specificFallback.length > 0) fallbackCards = specificFallback;
+              }
+              prodCards = shuffleProducts(fallbackCards).slice(0, 10);
           }
           
           setSwipeCards(prodCards);
@@ -315,33 +335,42 @@ export function Styling({ products, onAddToCart }: StylingProps) {
           setCurrentIntent(intent);
           const targetGender = intent.target_gender || '男士';
           const matchingProducts = products.filter(p => {
-              if (Array.isArray(p.category)) {
-                  return p.category.includes(intent.main_style);
-              }
-              return p.category === intent.main_style;
+              const isMainStyle = Array.isArray(p.category) ? p.category.includes(intent.main_style) : p.category === intent.main_style;
+              return isMainStyle && p.name.includes(targetGender);
           });
 
           if (intent.item_type && intent.item_type.trim() !== '') {
               const itemTypeMatches = matchingProducts.filter(p => 
-                  (p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type))
-                  && p.name.includes(targetGender)
+                  p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type)
               );
-              if (itemTypeMatches.length === 0) {
+              if (itemTypeMatches.length < 2) {
                   setTimeout(() => {
                       const fallbackMsg = {
                           role: 'ai',
-                          content: `【系统提示】：抱歉，在【${intent.main_style}】风格下暂时没有为您找到合适的【${intent.item_type}】。您可以看看该风格的其他推荐，或者尝试其他风格的单品！`,
+                          content: `【系统提示】：抱歉，在【${intent.main_style}】风格下暂时没有为您找到足够的【${intent.item_type}】。您可以看看该风格的其他推荐，或者尝试其他单品！`,
                           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                       };
                       api.sendChatMessage(fallbackMsg).then(saved => setMessages(prev => [...prev, saved]));
                   }, 1500);
                   return;
               } else {
-                  const shuffled = [...itemTypeMatches].sort(() => 0.5 - Math.random());
-                  setSwipeCards(shuffled.slice(0, 10));
-                  setLikedProducts([]);
+                  // User wants both steps, so extract subStyleTags ONLY from matched items
+                  const subStyleTags = Array.from(new Set(itemTypeMatches.map(p => p.tag)));
+                  const cards = subStyleTags.map(tag => {
+                      const firstProduct = itemTypeMatches.find(p => p.tag === tag);
+                      return {
+                          id: tag,
+                          name: tag,
+                          image: firstProduct?.image,
+                          isSubStyle: true
+                      };
+                  });
+                  
+                  setSwipeCards(cards);
                   setSwipeIndex(0);
-                  setTimeout(() => setViewMode('product_selection'), 1500);
+                  setLikedSubStyles([]);
+                  setLikedProducts([]);
+                  setTimeout(() => setViewMode('sub_style_swipe'), 1500);
                   return;
               }
           }
