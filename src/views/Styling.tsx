@@ -40,7 +40,16 @@ function ChatMessageContent({ msg }: { msg: any }) {
   let content = msg.content || "";
   
   // Clean up JSON block from display
-  content = content.replace(/```json\s*[\s\S]*?\s*```/ig, '').trim();
+  const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+  let blockToReplace = codeBlockMatch ? codeBlockMatch[0] : null;
+  if (!blockToReplace) {
+      const fallbackMatch = content.match(/(\{\s*"target_gender"[\s\S]*?\})/i);
+      if (fallbackMatch) blockToReplace = fallbackMatch[0];
+  }
+  if (blockToReplace) {
+      content = content.replace(blockToReplace, '').trim();
+      content = content.replace(/\d+\.?\s*JSON.*?$/img, '').trim();
+  }
   
   const thinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/);
 
@@ -203,11 +212,26 @@ export function Styling({ products, onAddToCart }: StylingProps) {
       let aiContent = response.aiMessage ? response.aiMessage.content : '';
       
       let intent = null;
-      const jsonMatch = aiContent.match(/```json\s*([\s\S]*?)\s*```/i);
-      if (jsonMatch) {
+      const codeBlockMatch = aiContent.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+      let jsonStr = null;
+      let blockToReplace = null;
+
+      if (codeBlockMatch) {
+          jsonStr = codeBlockMatch[1];
+          blockToReplace = codeBlockMatch[0];
+      } else {
+          const fallbackMatch = aiContent.match(/(\{\s*"target_gender"[\s\S]*?\})/i);
+          if (fallbackMatch) {
+              jsonStr = fallbackMatch[1];
+              blockToReplace = fallbackMatch[0];
+          }
+      }
+
+      if (jsonStr) {
           try {
-              intent = JSON.parse(jsonMatch[1]);
-              aiContent = aiContent.replace(/```json\s*[\s\S]*?\s*```/i, '').trim();
+              intent = JSON.parse(jsonStr);
+              aiContent = aiContent.replace(blockToReplace, '').trim();
+              aiContent = aiContent.replace(/\d+\.?\s*JSON.*?$/img, '').trim();
           } catch(e) {
               console.error("Failed to parse AI intent JSON:", e);
           }
