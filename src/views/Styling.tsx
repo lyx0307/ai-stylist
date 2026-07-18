@@ -146,11 +146,11 @@ export function Styling({ products, onAddToCart }: StylingProps) {
 
                     if (intent.item_type && intent.item_type.trim() !== '') {
                         const itemTypeMatches = matchingProducts.filter(p => 
-                            p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type)
+                            p.name.includes(intent.item_type) || p.tag.includes(intent.item_type)
                         );
                         if (itemTypeMatches.length < 2) {
                             const globalItemTypeMatches = products.filter(p => 
-                                (p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type))
+                                (p.name.includes(intent.item_type) || p.tag.includes(intent.item_type))
                                 && p.name.includes(targetGender)
                             );
                             if (globalItemTypeMatches.length >= 2) {
@@ -271,7 +271,7 @@ export function Styling({ products, onAddToCart }: StylingProps) {
           
           if (currentIntent?.item_type && currentIntent.item_type.trim() !== '') {
               const itemTypeMatches = prodCards.filter(p => 
-                  p.name.includes(currentIntent.item_type) || p.description.includes(currentIntent.item_type) || p.tag.includes(currentIntent.item_type)
+                  p.name.includes(currentIntent.item_type) || p.tag.includes(currentIntent.item_type)
               );
               if (itemTypeMatches.length > 0) prodCards = itemTypeMatches;
           }
@@ -282,7 +282,7 @@ export function Styling({ products, onAddToCart }: StylingProps) {
               // Fallback if no exact match
               let fallbackCards = products.filter(p => p.name.includes(targetGender));
               if (currentIntent?.item_type && currentIntent.item_type.trim() !== '') {
-                  const specificFallback = fallbackCards.filter(p => p.name.includes(currentIntent.item_type) || p.description.includes(currentIntent.item_type) || p.tag.includes(currentIntent.item_type));
+                  const specificFallback = fallbackCards.filter(p => p.name.includes(currentIntent.item_type) || p.tag.includes(currentIntent.item_type));
                   if (specificFallback.length > 0) fallbackCards = specificFallback;
               }
               prodCards = shuffleProducts(fallbackCards).slice(0, 10);
@@ -369,11 +369,11 @@ export function Styling({ products, onAddToCart }: StylingProps) {
 
           if (intent.item_type && intent.item_type.trim() !== '') {
               const itemTypeMatches = matchingProducts.filter(p => 
-                  p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type)
+                  p.name.includes(intent.item_type) || p.tag.includes(intent.item_type)
               );
               if (itemTypeMatches.length < 2) {
                   const globalItemTypeMatches = products.filter(p => 
-                      (p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type))
+                      (p.name.includes(intent.item_type) || p.tag.includes(intent.item_type))
                       && p.name.includes(targetGender)
                   );
                   if (globalItemTypeMatches.length >= 2) {
