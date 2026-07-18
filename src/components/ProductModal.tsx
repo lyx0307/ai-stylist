@@ -1,16 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { useState } from 'react';
 import { X, Heart, ShoppingBag } from 'lucide-react';
-
-interface Product {
-  id: number;
-  name: string;
-  price: string;
-  likes: string | number;
-  image: string;
-  description?: string;
-  tag?: string | null;
-}
+import { Product } from '../types';
 
 interface ProductModalProps {
   product: Product | null;

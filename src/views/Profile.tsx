@@ -6,7 +6,7 @@ import { cn } from '../components/Layout';
 import { ProductModal } from '../components/ProductModal';
 import { RegisterModal, UpdateMeasurementsModal, SubscriptionModal } from '../components/ProfileModals';
 import { UserProfile } from '../App';
-import { PRODUCTS } from '../data';
+import { Product } from '../types';
 import { api } from '../api';
 
 const STYLE_DATA = [
@@ -25,73 +25,11 @@ const ORDERS = [
   { icon: RefreshCw, label: '退换修', count: 0 },
 ];
 
-const FAVORITES_DATA = [
-  {
-    id: 1,
-    title: "春季极简风衣穿搭",
-    date: "3天前收藏",
-    timestamp: 1710000000000,
-    image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    items: [
-      { id: 101, name: "经典廓形风衣", price: "¥899", likes: "1.2k", image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3" },
-      { id: 102, name: "极简结构真皮手袋", price: "¥1,200", likes: "2.4k", image: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3" }
-    ]
-  },
-  {
-    id: 2,
-    title: "棕色系配饰参考",
-    date: "2周前收藏",
-    timestamp: 1709000000000,
-    image: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    items: [
-      { id: 201, name: "极简结构真皮手袋", price: "¥1,200", likes: "2.4k", image: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3" }
-    ]
-  },
-  {
-    id: 3,
-    title: "粗针织毛衣质感",
-    date: "1个月前收藏",
-    timestamp: 1707000000000,
-    image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    items: [
-      { id: 301, name: "美利奴羊毛粗针织衫", price: "¥450", likes: "500", image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3" }
-    ]
-  },
-  {
-    id: 4,
-    title: "阔腿裤通勤灵感",
-    date: "1周前收藏",
-    timestamp: 1709500000000,
-    image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    items: [
-      { id: 401, name: "阔腿褶皱西裤", price: "¥299", likes: "850", image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3" }
-    ]
-  },
-  {
-    id: 5,
-    title: "复古丹宁日常",
-    date: "1个月前收藏",
-    timestamp: 1707500000000,
-    image: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    items: [
-      { id: 501, name: "90年代直筒牛仔裤", price: "¥350", likes: "2.1k", image: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3" }
-    ]
-  },
-  {
-    id: 6,
-    title: "晚宴丝绸长裙",
-    date: "2个月前收藏",
-    timestamp: 1705000000000,
-    image: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    items: [
-      { id: 601, name: "缎面吊带连衣裙", price: "¥599", likes: "1.5k", image: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3" }
-    ]
-  }
-];
 
 type ViewState = 'main' | 'orders' | 'inspiration';
 
 interface ProfileProps {
+  products: Product[];
   userProfile: UserProfile;
   setUserProfile: (profile: UserProfile) => void;
   cartItems?: any[];
@@ -99,7 +37,7 @@ interface ProfileProps {
   onRemoveFromCart?: (id: number) => void;
 }
 
-export function Profile({ userProfile, setUserProfile, cartItems = [], onAddToCart, onRemoveFromCart }: ProfileProps) {
+export function Profile({ products, userProfile, setUserProfile, cartItems = [], onAddToCart, onRemoveFromCart }: ProfileProps) {
   const [viewState, setViewState] = useState<ViewState>('main');
   const [selectedOrderType, setSelectedOrderType] = useState<string | null>(null);
   const [selectedInspiration, setSelectedInspiration] = useState<any | null>(null);
@@ -125,7 +63,7 @@ export function Profile({ userProfile, setUserProfile, cartItems = [], onAddToCa
     setViewState('orders');
   };
 
-  const handleInspirationClick = (item: typeof FAVORITES_DATA[0]) => {
+  const handleInspirationClick = (item: any) => {
     setSelectedInspiration(item);
     setViewState('inspiration');
   };
@@ -158,7 +96,7 @@ export function Profile({ userProfile, setUserProfile, cartItems = [], onAddToCa
     }).catch(console.error);
   };
 
-  const handleAddItem = (product: typeof PRODUCTS[0]) => {
+  const handleAddItem = (product: Product) => {
     if (selectedInspiration) {
       api.addFavoriteItem(selectedInspiration.id, product.id).then(() => {
         const updatedInspiration = {
@@ -462,6 +400,13 @@ export function Profile({ userProfile, setUserProfile, cartItems = [], onAddToCa
                     ))}
                   </AnimatePresence>
                 </div>
+
+                {sortedFavorites.length === 0 && (
+                  <div className="bg-white rounded-2xl p-12 text-center text-gray-400 font-medium shadow-sm col-span-full">
+                    <Heart className="mx-auto mb-3 opacity-50" size={32} />
+                    还没有收藏灵感，去首页逛逛吧！
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -590,7 +535,7 @@ export function Profile({ userProfile, setUserProfile, cartItems = [], onAddToCa
               </div>
               <div className="flex-1 overflow-y-auto p-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {PRODUCTS.map((product) => (
+                  {products.map((product) => (
                     <div
                       key={product.id}
                       onClick={() => handleAddItem(product)}

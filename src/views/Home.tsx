@@ -1,32 +1,34 @@
 import { motion, AnimatePresence } from 'motion/react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Sparkles, Heart } from 'lucide-react';
 import { cn } from '../components/Layout';
 import { ProductModal } from '../components/ProductModal';
 import { CATEGORIES } from '../data';
-import { api } from '../api';
+import { Product, getProductCategories, shuffleProducts } from '../types';
 
-export function Home({ onNavigateToStyling, onAddToCart }: { onNavigateToStyling?: () => void, onAddToCart?: (product: any, color: string, size: string) => void }) {
+interface HomeProps {
+  products: Product[];
+  productsLoading?: boolean;
+  onNavigateToStyling?: () => void;
+  onAddToCart?: (product: Product, color: string, size: string) => void;
+}
+
+export function Home({ products, productsLoading, onNavigateToStyling, onAddToCart }: HomeProps) {
   const [activeCategory, setActiveCategory] = useState("为你推荐");
   const [likedProducts, setLikedProducts] = useState<number[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
-  const [products, setProducts] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  useEffect(() => {
-    api.getProducts().then(setProducts).catch(console.error);
-  }, []);
+  const recommendedProducts = useMemo(
+    () => shuffleProducts(products).slice(0, 20),
+    [products]
+  );
 
-  const filteredProducts = React.useMemo(() => {
+  const filteredProducts = useMemo(() => {
     if (activeCategory === "为你推荐") {
-      // Randomly pick 20 products for recommendation
-      const shuffled = [...products].sort(() => Math.random() - 0.5);
-      return shuffled.slice(0, 20);
+      return recommendedProducts;
     }
-    return products.filter(p => {
-      const cats = typeof p.category === 'string' ? p.category : (p.category || []);
-      return cats.includes(activeCategory);
-    });
-  }, [activeCategory, products]);
+    return products.filter(p => getProductCategories(p).includes(activeCategory));
+  }, [activeCategory, products, recommendedProducts]);
 
   const toggleLike = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
@@ -90,6 +92,12 @@ export function Home({ onNavigateToStyling, onAddToCart }: { onNavigateToStyling
 
       {/* Product Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 min-h-[400px]">
+        {productsLoading && (
+          <div className="col-span-full text-center text-gray-400 py-20">正在加载商品...</div>
+        )}
+        {!productsLoading && filteredProducts.length === 0 && (
+          <div className="col-span-full text-center text-gray-400 py-20">暂无商品</div>
+        )}
         <AnimatePresence mode="popLayout">
           {filteredProducts.map((product) => (
             <motion.div

@@ -4,6 +4,7 @@ import { Home } from './views/Home';
 import { Profile } from './views/Profile';
 import { Styling } from './views/Styling';
 import { api } from './api';
+import { Product } from './types';
 
 export interface UserProfile {
   id?: string;
@@ -22,8 +23,10 @@ export default function App() {
     isRegistered: false
   });
   const [cartItems, setCartItems] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
 
-  const handleAddToCart = (product: any, color: string, size: string) => {
+  const handleAddToCart = (product: Product, color: string, size: string) => {
     setCartItems(prev => [...prev, { ...product, cartItemId: Date.now(), selectedColor: color, selectedSize: size }]);
     alert('已成功加入购物车！');
   };
@@ -33,7 +36,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Fetch mock user configuration from backend
+    api.getProducts()
+      .then(setProducts)
+      .catch(console.error)
+      .finally(() => setProductsLoading(false));
+
     api.getUser().then(data => {
       if (data) {
         setUserProfile({
@@ -48,7 +55,6 @@ export default function App() {
   }, []);
 
   const handleLogout = () => {
-    // Only locally log out for the mock user update logic
     setUserProfile({
       name: '刘宇翔',
       height: '165',
@@ -56,7 +62,7 @@ export default function App() {
       isRegistered: false
     });
     api.updateUser({ ...userProfile, is_registered: false }).then(() => {
-      window.location.reload(); // Force reload to clear any cached states
+      window.location.reload();
     }).catch(err => {
       console.error(err);
       setCurrentView('home');
@@ -65,10 +71,20 @@ export default function App() {
 
   return (
     <Layout currentView={currentView} setCurrentView={setCurrentView} onLogout={handleLogout}>
-      {currentView === 'home' && <Home onNavigateToStyling={() => setCurrentView('styling')} onAddToCart={handleAddToCart} />}
-      {currentView === 'styling' && <Styling onAddToCart={handleAddToCart} />}
+      {currentView === 'home' && (
+        <Home
+          products={products}
+          productsLoading={productsLoading}
+          onNavigateToStyling={() => setCurrentView('styling')}
+          onAddToCart={handleAddToCart}
+        />
+      )}
+      {currentView === 'styling' && (
+        <Styling products={products} onAddToCart={handleAddToCart} />
+      )}
       {currentView === 'profile' && (
         <Profile
+          products={products}
           userProfile={userProfile}
           setUserProfile={setUserProfile}
           cartItems={cartItems}

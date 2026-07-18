@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from 'motion/react';
 import { Send, ThumbsUp, ThumbsDown, X, Heart, MoreHorizontal, ShoppingBag, ArrowUp, Sparkles as LucideSparkles, RefreshCw } from 'lucide-react';
 import { cn } from '../components/Layout';
 import { ProductModal } from '../components/ProductModal';
 import { api } from '../api';
+import { Product, shuffleProducts } from '../types';
 
 // Mock Data
 const CHAT_HISTORY = [
@@ -28,58 +29,6 @@ const PROMPT_BATCHES = [
   ]
 ];
 
-const SWIPE_CARDS = [
-  {
-    id: 1,
-    image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tag: "极简胶囊系列"
-  },
-  {
-    id: 2,
-    image: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tag: "都市通勤"
-  },
-  {
-    id: 3,
-    image: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tag: "优雅晚宴"
-  }
-];
-
-const RECOMMENDED_PRODUCTS = [
-  {
-    id: 1,
-    name: "极简垂坠西装",
-    price: "¥299",
-    image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tag: "98% 匹配",
-    description: "这款西装采用高垂坠感面料，剪裁利落，适合多种场合穿着。极简设计风格，轻松打造高级感通勤穿搭。"
-  },
-  {
-    id: 2,
-    name: "高腰阔腿西装裤",
-    price: "¥199",
-    image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tag: null,
-    description: "经典高腰设计，拉长腿部线条，面料舒适透气。"
-  },
-  {
-    id: 3,
-    name: "真丝吊带连衣裙",
-    price: "¥599",
-    image: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tag: null,
-    description: "100% 桑蚕丝，光泽感极佳，尽显优雅气质。"
-  },
-  {
-    id: 4,
-    name: "美利奴羊毛粗针织衫",
-    price: "¥450",
-    image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tag: null,
-    description: "澳洲进口美利奴羊毛，保暖舒适，亲肤不扎。"
-  }
-];
 
 function ChatMessageContent({ msg }: { msg: any }) {
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
@@ -120,17 +69,22 @@ function ChatMessageContent({ msg }: { msg: any }) {
 }
 
 interface StylingProps {
+  products: Product[];
   onAddToCart?: (product: any, color: string, size: string) => void;
 }
 
-export function Styling({ onAddToCart }: StylingProps) {
+export function Styling({ products, onAddToCart }: StylingProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [viewMode, setViewMode] = useState<'chat' | 'swipe' | 'results'>('chat');
-  const [selectedProduct, setSelectedProduct] = useState<typeof RECOMMENDED_PRODUCTS[0] | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [swipeIndex, setSwipeIndex] = useState(0);
   const [promptBatchIndex, setPromptBatchIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Derive swipe cards and recommendations from shared products prop
+  const swipeCards = useMemo(() => shuffleProducts(products).slice(0, 5), [products]);
+  const recommendedProducts = useMemo(() => shuffleProducts(products).slice(0, 8), [products]);
 
   // Swipe mechanics
   const x = useMotionValue(0);
@@ -141,6 +95,7 @@ export function Styling({ onAddToCart }: StylingProps) {
   const controls = useAnimation();
 
   useEffect(() => {
+
     api.getChatHistory().then(history => {
       if (history && history.length > 0) {
         setMessages(history);
@@ -166,7 +121,7 @@ export function Styling({ onAddToCart }: StylingProps) {
     x.set(0);
     controls.set({ x: 0, opacity: 1 });
 
-    if (swipeIndex < SWIPE_CARDS.length - 1) {
+    if (swipeIndex < swipeCards.length - 1) {
       setSwipeIndex(prev => prev + 1);
     } else {
       // End of swipe, show results
@@ -359,7 +314,7 @@ export function Styling({ onAddToCart }: StylingProps) {
         {/* Main View (Swipe or Grid) */}
         <div className="flex-1 overflow-y-auto p-8 flex flex-col items-center justify-center min-h-full">
           <AnimatePresence mode="wait">
-            {viewMode === 'swipe' && (
+            {viewMode === 'swipe' && swipeCards.length > 0 && (
               <motion.div
                 key="swipe"
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -379,7 +334,7 @@ export function Styling({ onAddToCart }: StylingProps) {
                   animate={controls}
                 >
                   <img
-                    src={SWIPE_CARDS[swipeIndex].image}
+                    src={swipeCards[swipeIndex]?.image}
                     alt="Style"
                     className="w-full h-full object-cover pointer-events-none"
                   />
@@ -405,7 +360,7 @@ export function Styling({ onAddToCart }: StylingProps) {
                   </div>
                   <div className="absolute bottom-8 left-8 pointer-events-none">
                     <div className="bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-medium">
-                      {SWIPE_CARDS[swipeIndex].tag}
+                      {swipeCards[swipeIndex]?.name}
                     </div>
                   </div>
                 </motion.div>
@@ -435,10 +390,10 @@ export function Styling({ onAddToCart }: StylingProps) {
                 className="w-full h-full"
               >
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-bold text-gray-900">为你推荐 <span className="text-gray-400 font-normal text-sm ml-2">8 件单品</span></h2>
+                  <h2 className="text-lg font-bold text-gray-900">为你推荐 <span className="text-gray-400 font-normal text-sm ml-2">{recommendedProducts.length} 件单品</span></h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 pb-20">
-                  {RECOMMENDED_PRODUCTS.map((product) => (
+                  {recommendedProducts.map((product) => (
                     <div
                       key={product.id}
                       onClick={() => setSelectedProduct(product)}
