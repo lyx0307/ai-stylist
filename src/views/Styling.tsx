@@ -149,7 +149,8 @@ export function Styling({ products, onAddToCart }: StylingProps) {
                             p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type)
                         );
                         if (itemTypeMatches.length < 2) {
-                            return; // Fallback handled in chat, do nothing here
+                            setCurrentIntent({ ...intent, item_type: '' }); // Clear item_type to fallback to general swipe
+                            // We do NOT return here so it falls through to the general subStyleTags logic below
                         } else {
                             // User wants both steps, so extract subStyleTags ONLY from matched items
                             const subStyleTags = Array.from(new Set(itemTypeMatches.map(p => p.tag)));
@@ -344,15 +345,16 @@ export function Styling({ products, onAddToCart }: StylingProps) {
                   p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type)
               );
               if (itemTypeMatches.length < 2) {
+                  setCurrentIntent({ ...intent, item_type: '' }); // Clear item_type to fallback to general swipe
                   setTimeout(() => {
                       const fallbackMsg = {
                           role: 'ai',
-                          content: `【系统提示】：抱歉，在【${intent.main_style}】风格下暂时没有为您找到足够的【${intent.item_type}】。您可以看看该风格的其他推荐，或者尝试其他单品！`,
+                          content: `抱歉，在【${intent.main_style}】风格下暂时没有为您找到足够的【${intent.item_type}】。您可以看看该风格的其他推荐，或者尝试其他风格单品哦！`,
                           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                       };
                       api.sendChatMessage(fallbackMsg).then(saved => setMessages(prev => [...prev, saved]));
                   }, 1500);
-                  return;
+                  // Do NOT return here, let it fall through to show the general style cards
               } else {
                   // User wants both steps, so extract subStyleTags ONLY from matched items
                   const subStyleTags = Array.from(new Set(itemTypeMatches.map(p => p.tag)));
