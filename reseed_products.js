@@ -23,7 +23,6 @@ const categories = ["极简风", "街头潮流", "老钱风", "复古", "职场�
 const adjectives = ["高品质", "经典", "复古", "休闲", "极简", "优雅", "法式", "宽松", "修身", "百搭", "廓形", "质感", "立体", "时尚", "轻奢"];
 const materials = ["纯棉", "羊毛", "真丝", "亚麻", "牛仔", "牛皮", "丝绒", "羊绒", "混纺", "缎面", "针织", "防水面料", "粗花呢", "灯芯绒", "雪纺"];
 
-// Items with gender assignment: "both" means can be male or female, "female" means female only
 const items = [
     { noun: "风衣", gender: "both" },
     { noun: "西服套装", gender: "both" },
@@ -42,12 +41,23 @@ const items = [
     { noun: "帽子", gender: "both" },
 ];
 
-function generateProduct(category, index) {
+// Generate SVG data URI with Chinese text on white background
+function makeSvgImage(genderPrefix, noun) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200">
+  <rect width="800" height="1200" fill="#f5f5f5"/>
+  <text x="400" y="520" text-anchor="middle" font-family="Arial,sans-serif" font-size="80" font-weight="bold" fill="#555">${genderPrefix}</text>
+  <text x="400" y="660" text-anchor="middle" font-family="Arial,sans-serif" font-size="96" font-weight="bold" fill="#222">${noun}</text>
+</svg>`;
+    // Encode as data URI
+    const encoded = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    return encoded;
+}
+
+function generateProduct(category) {
     const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
     const mat = materials[Math.floor(Math.random() * materials.length)];
     const item = items[Math.floor(Math.random() * items.length)];
 
-    // Determine gender
     let genderPrefix;
     if (item.gender === "female") {
         genderPrefix = "女士";
@@ -56,31 +66,19 @@ function generateProduct(category, index) {
     }
 
     const name = `${adj}${genderPrefix}${mat}${item.noun}`;
-
     const price = Math.floor(Math.random() * 2000 + 100);
     const likes = Math.floor(Math.random() * 5000);
-
-    // White background text image using placehold.co
-    const displayText = `${genderPrefix}\n${item.noun}`;
-    const encodedText = encodeURIComponent(displayText);
-    const image = `https://placehold.co/800x1200/f8f8f8/333333?text=${encodedText}&font=noto-sans`;
+    const image = makeSvgImage(genderPrefix, item.noun);
 
     const pTags = ["NEW", "HOT", "AI PICK", null, null, null];
     const tag = pTags[Math.floor(Math.random() * pTags.length)];
 
-    let productCategories = [category];
-    if (Math.random() > 0.7) {
-        const otherCat = categories[Math.floor(Math.random() * categories.length)];
-        if (otherCat !== category) {
-            productCategories.push(otherCat);
-        }
-    }
-
+    // Each product belongs to exactly ONE category
     return {
         name,
         price: `¥${price.toLocaleString()}`,
         image,
-        category: productCategories,
+        category: [category],
         tag,
         likes,
         description: `为您量身打造的${category}单品，选用${mat}材质，完美契合您的穿搭灵感。`
@@ -88,32 +86,26 @@ function generateProduct(category, index) {
 }
 
 async function reseed() {
-    // Step 1: Delete all existing products
     console.log('Deleting all existing products...');
-    
-    // First delete favorite_items that reference products
-    const { error: fiError } = await supabase.from('favorite_items').delete().neq('id', 0);
+    const { error: fiError } = await supabase.from('favorite_items').delete().gte('favorite_id', 0);
     if (fiError) console.warn('Warning deleting favorite_items:', fiError.message);
-    
-    // Then delete products
-    const { error: delError } = await supabase.from('products').delete().neq('id', 0);
+
+    const { error: delError } = await supabase.from('products').delete().gte('id', 0);
     if (delError) {
         console.error('Error deleting products:', delError);
         return;
     }
     console.log('All existing products deleted.');
 
-    // Step 2: Generate 100 new products (20 per category)
     console.log('Generating 20 products per category (100 total)...');
     const allProducts = [];
 
     for (const cat of categories) {
         for (let i = 0; i < 20; i++) {
-            allProducts.push(generateProduct(cat, allProducts.length + 1));
+            allProducts.push(generateProduct(cat));
         }
     }
 
-    // Step 3: Insert in batches
     const batchSize = 50;
     for (let i = 0; i < allProducts.length; i += batchSize) {
         const batch = allProducts.slice(i, i + batchSize);

@@ -16,13 +16,17 @@ export function Home({ onNavigateToStyling, onAddToCart }: { onNavigateToStyling
     api.getProducts().then(setProducts).catch(console.error);
   }, []);
 
-  const filteredProducts = activeCategory === "为你推荐"
-    ? products
-    : products.filter(p => {
-      // Handle case where category is a string instead of array
+  const filteredProducts = React.useMemo(() => {
+    if (activeCategory === "为你推荐") {
+      // Randomly pick 20 products for recommendation
+      const shuffled = [...products].sort(() => Math.random() - 0.5);
+      return shuffled.slice(0, 20);
+    }
+    return products.filter(p => {
       const cats = typeof p.category === 'string' ? p.category : (p.category || []);
       return cats.includes(activeCategory);
     });
+  }, [activeCategory, products]);
 
   const toggleLike = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
