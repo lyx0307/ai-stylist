@@ -42,7 +42,7 @@ const items = [
     { noun: "帽子", gender: "both" },
 ];
 
-function generateProduct(category) {
+function generateProduct(category, index) {
     const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
     const mat = materials[Math.floor(Math.random() * materials.length)];
     const item = items[Math.floor(Math.random() * items.length)];
@@ -87,18 +87,33 @@ function generateProduct(category) {
     };
 }
 
-async function seedData() {
+async function reseed() {
+    // Step 1: Delete all existing products
+    console.log('Deleting all existing products...');
+    
+    // First delete favorite_items that reference products
+    const { error: fiError } = await supabase.from('favorite_items').delete().neq('id', 0);
+    if (fiError) console.warn('Warning deleting favorite_items:', fiError.message);
+    
+    // Then delete products
+    const { error: delError } = await supabase.from('products').delete().neq('id', 0);
+    if (delError) {
+        console.error('Error deleting products:', delError);
+        return;
+    }
+    console.log('All existing products deleted.');
+
+    // Step 2: Generate 100 new products (20 per category)
     console.log('Generating 20 products per category (100 total)...');
     const allProducts = [];
 
     for (const cat of categories) {
         for (let i = 0; i < 20; i++) {
-            allProducts.push(generateProduct(cat));
+            allProducts.push(generateProduct(cat, allProducts.length + 1));
         }
     }
 
-    console.log(`Prepared ${allProducts.length} products. Inserting to Supabase in batches...`);
-
+    // Step 3: Insert in batches
     const batchSize = 50;
     for (let i = 0; i < allProducts.length; i += batchSize) {
         const batch = allProducts.slice(i, i + batchSize);
@@ -109,7 +124,7 @@ async function seedData() {
         }
     }
 
-    console.log('Seed complete!');
+    console.log(`Done! Inserted ${allProducts.length} products.`);
 }
 
-seedData();
+reseed();
