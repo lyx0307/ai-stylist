@@ -298,7 +298,7 @@ JSON结构如下：
             if (aiMsgError) throw aiMsgError;
             res.json({ userMessage: userMsgData, aiMessage: aiMsgData });
         } else {
-            res.json({ userMessage: userMsgData });
+            res.json(userMsgData);
         }
     } catch (err) {
         console.error("Chat API Error:", err);
