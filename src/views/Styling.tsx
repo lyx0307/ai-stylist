@@ -149,8 +149,32 @@ export function Styling({ products, onAddToCart }: StylingProps) {
                             p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type)
                         );
                         if (itemTypeMatches.length < 2) {
-                            setCurrentIntent({ ...intent, item_type: '' }); // Clear item_type to fallback to general swipe
-                            // We do NOT return here so it falls through to the general subStyleTags logic below
+                            const globalItemTypeMatches = products.filter(p => 
+                                (p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type))
+                                && p.name.includes(targetGender)
+                            );
+                            if (globalItemTypeMatches.length >= 2) {
+                                setCurrentIntent({ ...intent, main_style: '' });
+                                const subStyleTags = Array.from(new Set(globalItemTypeMatches.map(p => p.tag)));
+                                const cards = subStyleTags.map(tag => {
+                                    const firstProduct = globalItemTypeMatches.find(p => p.tag === tag);
+                                    return {
+                                        id: tag,
+                                        name: tag,
+                                        image: firstProduct?.image,
+                                        isSubStyle: true
+                                    };
+                                });
+                                setSwipeCards(cards);
+                                setSwipeIndex(0);
+                                setLikedSubStyles([]);
+                                setLikedProducts([]);
+                                setViewMode('sub_style_swipe');
+                                return;
+                            } else {
+                                setCurrentIntent({ ...intent, item_type: '' }); // Clear item_type to fallback to general swipe
+                                // We do NOT return here so it falls through to the general subStyleTags logic below
+                            }
                         } else {
                             // User wants both steps, so extract subStyleTags ONLY from matched items
                             const subStyleTags = Array.from(new Set(itemTypeMatches.map(p => p.tag)));
@@ -236,8 +260,11 @@ export function Styling({ products, onAddToCart }: StylingProps) {
           const subStylesToUse = direction === 'right' ? [...likedSubStyles, currentCard.name] : likedSubStyles;
           const targetGender = currentIntent?.target_gender || '男士';
           const filterTags = subStylesToUse.length > 0 ? subStylesToUse : Array.from(new Set(products.filter(p => {
-              const isMainStyle = Array.isArray(p.category) ? p.category.includes(currentIntent?.main_style) : p.category === currentIntent?.main_style;
-              return isMainStyle && p.name.includes(targetGender);
+              if (currentIntent?.main_style) {
+                  const isMainStyle = Array.isArray(p.category) ? p.category.includes(currentIntent.main_style) : p.category === currentIntent.main_style;
+                  return isMainStyle && p.name.includes(targetGender);
+              }
+              return p.name.includes(targetGender);
           }).map(p => p.tag)));
           
           let prodCards = products.filter(p => filterTags.includes(p.tag) && p.name.includes(targetGender));
@@ -345,16 +372,48 @@ export function Styling({ products, onAddToCart }: StylingProps) {
                   p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type)
               );
               if (itemTypeMatches.length < 2) {
-                  setCurrentIntent({ ...intent, item_type: '' }); // Clear item_type to fallback to general swipe
-                  setTimeout(() => {
-                      const fallbackMsg = {
-                          role: 'ai',
-                          content: `抱歉，在【${intent.main_style}】风格下暂时没有为您找到足够的【${intent.item_type}】。您可以看看该风格的其他推荐，或者尝试其他风格单品哦！`,
-                          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      };
-                      api.sendChatMessage(fallbackMsg).then(saved => setMessages(prev => [...prev, saved]));
-                  }, 1500);
-                  // Do NOT return here, let it fall through to show the general style cards
+                  const globalItemTypeMatches = products.filter(p => 
+                      (p.name.includes(intent.item_type) || p.description.includes(intent.item_type) || p.tag.includes(intent.item_type))
+                      && p.name.includes(targetGender)
+                  );
+                  if (globalItemTypeMatches.length >= 2) {
+                      setCurrentIntent({ ...intent, main_style: '' });
+                      setTimeout(() => {
+                          const fallbackMsg = {
+                              role: 'ai',
+                              content: `抱歉，在【${intent.main_style}】风格下暂时没有为您找到足够的【${intent.item_type}】。不过我为您挑选了其他风格的【${intent.item_type}】，来看看有没有喜欢的吧！`,
+                              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          };
+                          api.sendChatMessage(fallbackMsg).then(saved => setMessages(prev => [...prev, saved]));
+                      }, 1500);
+                      const subStyleTags = Array.from(new Set(globalItemTypeMatches.map(p => p.tag)));
+                      const cards = subStyleTags.map(tag => {
+                          const firstProduct = globalItemTypeMatches.find(p => p.tag === tag);
+                          return {
+                              id: tag,
+                              name: tag,
+                              image: firstProduct?.image,
+                              isSubStyle: true
+                          };
+                      });
+                      setSwipeCards(cards);
+                      setSwipeIndex(0);
+                      setLikedSubStyles([]);
+                      setLikedProducts([]);
+                      setTimeout(() => setViewMode('sub_style_swipe'), 1500);
+                      return;
+                  } else {
+                      setCurrentIntent({ ...intent, item_type: '' }); // Clear item_type to fallback to general swipe
+                      setTimeout(() => {
+                          const fallbackMsg = {
+                              role: 'ai',
+                              content: `抱歉，目前暂时没有为您找到足够的【${intent.item_type}】。您可以看看【${intent.main_style}】风格下的其他款式推荐哦！`,
+                              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          };
+                          api.sendChatMessage(fallbackMsg).then(saved => setMessages(prev => [...prev, saved]));
+                      }, 1500);
+                      // Do NOT return here, let it fall through to show the general style cards
+                  }
               } else {
                   // User wants both steps, so extract subStyleTags ONLY from matched items
                   const subStyleTags = Array.from(new Set(itemTypeMatches.map(p => p.tag)));
