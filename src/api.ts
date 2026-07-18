@@ -78,5 +78,16 @@ export const api = {
         });
         if (!res.ok) throw new Error('Failed to send chat message');
         return res.json();
+    },
+
+    // Preferences
+    savePreference: async (preferenceData) => {
+        const res = await fetch(`${BASE_URL}/preferences`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(preferenceData),
+        });
+        if (!res.ok) throw new Error('Failed to save preference');
+        return res.json();
     }
 };

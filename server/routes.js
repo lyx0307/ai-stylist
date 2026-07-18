@@ -220,23 +220,52 @@ router.post('/chat', async (req, res) => {
                 .select('*')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
-                .limit(10);
+                .limit(20);
 
             let history = historyData || [];
             history.reverse();
 
-            const aiMessages = history.map(msg => {
-                let cleanContent = msg.content || "";
-                cleanContent = cleanContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
-                return {
-                    role: msg.role === 'ai' ? 'assistant' : 'user',
-                    content: cleanContent
-                };
+            const aiMessages = [];
+            let userPreferencesText = "";
+            const preferences = [];
+
+            history.forEach(msg => {
+                if (msg.role === 'preference') {
+                    // Hidden memory of user preferences
+                    try {
+                        const p = JSON.parse(msg.content);
+                        preferences.push(`喜欢[${p.type}]：${p.value} (场景：${p.context || '未知'})`);
+                    } catch(e) {}
+                } else {
+                    let cleanContent = msg.content || "";
+                    cleanContent = cleanContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
+                    aiMessages.push({
+                        role: msg.role === 'ai' ? 'assistant' : 'user',
+                        content: cleanContent
+                    });
+                }
             });
 
+            if (preferences.length > 0) {
+                userPreferencesText = `\n【用户知识库（近期偏好记忆）】\n${preferences.join('\n')}\n请在推荐时优先考虑用户的上述偏好。`;
+            }
+
             const systemPrompt = `你是一个专业的AI时尚穿搭造型师。
-【核心原则】：你只能讨论和回答与服装、穿搭、造型、美妆、配饰等时尚相关的问题。对于任何非此类问题（如写代码、数学题、政治、询问你是不是AI等），必须委婉且幽默地拒绝回答、打哈哈混过去，并强行把话题绕回到给用户做穿搭推荐上。绝对不能违背这个原则。
-你的用户是：${users?.name || 'Unknown'}，身高：${users?.height || '未知'}cm，体重：${users?.weight || '未知'}kg。请根据这些信息和用户的提问，给出简短、专业、富有亲和力的穿搭建议。每次回复不要太长，保持在1-3句。对于没有明确风格的请求，可以引导用户左滑/右滑（即在回复的最后加上 action: "start_swipe"字眼，虽然这是后端处理的，但你的重点是给出穿搭建议）。`;
+【核心原则】：你只能讨论和回答与服装、穿搭、造型、美妆、配饰等时尚相关的问题。对于任何非此类问题，必须委婉且幽默地拒绝回答并绕回时尚话题。
+你的用户是：${users?.name || 'Unknown'}，身高：${users?.height || '未知'}cm，体重：${users?.weight || '未知'}kg。${userPreferencesText}
+
+【输出要求】：
+你的回复必须包含两部分：
+1. 给用户的穿搭建议文案（简短、专业、富有亲和力，1-3句即可）。
+2. 在文案最后，必须附带一个JSON格式的意图解析，用于触发前端系统的展示。必须用\`\`\`json包裹。
+JSON结构如下：
+\`\`\`json
+{
+  "target_gender": "女士" 或 "男士", // 默认为男士，除非用户明确要求给女朋友、女生等
+  "main_style": "极简风" 或 "街头潮流" 或 "老钱风" 或 "复古" 或 "职场通勤" 或 "" // 选择最接近的大风格，如果无法判断则为空字符串
+}
+\`\`\`
+`;
 
             const completion = await openai.chat.completions.create({
                 model: "qwen3.7-plus",
@@ -272,6 +301,30 @@ router.post('/chat', async (req, res) => {
         }
     } catch (err) {
         console.error("Chat API Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/preferences', async (req, res) => {
+    try {
+        const { type, value, context } = req.body;
+        
+        const { data: users } = await supabase.from('users').select('*').limit(1).single();
+        const userId = users ? users.id : null;
+
+        const content = JSON.stringify({ type, value, context });
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const { data, error } = await supabase
+            .from('chat_history')
+            .insert([{ user_id: userId, role: 'preference', content, action: 'save_preference', time }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json({ success: true, data });
+    } catch (err) {
+        console.error("Preferences API Error:", err);
         res.status(500).json({ error: err.message });
     }
 });

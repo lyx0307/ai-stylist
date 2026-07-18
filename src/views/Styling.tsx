@@ -76,15 +76,20 @@ interface StylingProps {
 export function Styling({ products, onAddToCart }: StylingProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [viewMode, setViewMode] = useState<'chat' | 'swipe' | 'results'>('chat');
+  const [viewMode, setViewMode] = useState<'chat' | 'sub_style_swipe' | 'product_swipe' | 'results'>('chat');
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  
   const [swipeIndex, setSwipeIndex] = useState(0);
+  const [swipeCards, setSwipeCards] = useState<any[]>([]);
+  const [likedSubStyles, setLikedSubStyles] = useState<string[]>([]);
+  const [likedProducts, setLikedProducts] = useState<any[]>([]);
+  const [currentIntent, setCurrentIntent] = useState<any>(null);
+  
   const [promptBatchIndex, setPromptBatchIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Derive swipe cards and recommendations from shared products prop
-  const swipeCards = useMemo(() => shuffleProducts(products).slice(0, 5), [products]);
-  const recommendedProducts = useMemo(() => shuffleProducts(products).slice(0, 8), [products]);
+  // Recommendations are derived from liked products
+  const recommendedProducts = useMemo(() => likedProducts.length > 0 ? likedProducts : shuffleProducts(products).slice(0, 8), [likedProducts, products]);
 
   // Swipe mechanics
   const x = useMotionValue(0);
@@ -95,10 +100,11 @@ export function Styling({ products, onAddToCart }: StylingProps) {
   const controls = useAnimation();
 
   useEffect(() => {
-
     api.getChatHistory().then(history => {
-      if (history && history.length > 0) {
-        setMessages(history);
+      // Filter out preference history from UI
+      const uiHistory = (history || []).filter((h: any) => h.role !== 'preference');
+      if (uiHistory.length > 0) {
+        setMessages(uiHistory);
       } else {
         setMessages(CHAT_HISTORY);
       }
@@ -110,36 +116,72 @@ export function Styling({ products, onAddToCart }: StylingProps) {
   }, [messages]);
 
   const handleSwipe = async (direction: 'left' | 'right') => {
-    // Animate the card completely off screen
+    const currentCard = swipeCards[swipeIndex];
+
     await controls.start({
       x: direction === 'right' ? window.innerWidth : -window.innerWidth,
       opacity: 0,
       transition: { duration: 0.3 }
     });
 
-    // Reset position for next card
     x.set(0);
     controls.set({ x: 0, opacity: 1 });
+    
+    // Save preference
+    if (direction === 'right') {
+        if (viewMode === 'sub_style_swipe') {
+            setLikedSubStyles(prev => [...prev, currentCard.name]);
+            api.savePreference({ type: 'sub_style_like', value: currentCard.name, context: 'AI Styling' }).catch(console.error);
+        } else if (viewMode === 'product_swipe') {
+            setLikedProducts(prev => [...prev, currentCard]);
+            api.savePreference({ type: 'product_like', value: currentCard.id.toString(), context: 'AI Styling' }).catch(console.error);
+        }
+    } else {
+        if (viewMode === 'sub_style_swipe') {
+            api.savePreference({ type: 'sub_style_dislike', value: currentCard.name, context: 'AI Styling' }).catch(console.error);
+        } else if (viewMode === 'product_swipe') {
+            api.savePreference({ type: 'product_dislike', value: currentCard.id.toString(), context: 'AI Styling' }).catch(console.error);
+        }
+    }
 
     if (swipeIndex < swipeCards.length - 1) {
       setSwipeIndex(prev => prev + 1);
     } else {
-      // End of swipe, show results
-      setViewMode('results');
-      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const msgData = {
-        role: 'ai',
-        content: '收到你的喜好偏好啦！根据你右滑记录的信息，这是为你精准匹配的最佳单品组合推荐。',
-        time,
-        action: 'show_results'
-      };
+      if (viewMode === 'sub_style_swipe') {
+          // Transition to product swipe
+          const subStylesToUse = direction === 'right' ? [...likedSubStyles, currentCard.name] : likedSubStyles;
+          const filterTags = subStylesToUse.length > 0 ? subStylesToUse : Array.from(new Set(products.filter(p => p.category === currentIntent?.main_style).map(p => p.tag)));
+          const targetGender = currentIntent?.target_gender || '男士';
+          
+          let prodCards = products.filter(p => filterTags.includes(p.tag) && p.name.includes(targetGender));
+          prodCards = shuffleProducts(prodCards).slice(0, 5); // Limit to 5 products for swipe
+          
+          if (prodCards.length === 0) {
+              // Fallback if no exact match
+              prodCards = shuffleProducts(products).slice(0, 5);
+          }
+          
+          setSwipeCards(prodCards);
+          setSwipeIndex(0);
+          setViewMode('product_swipe');
+      } else {
+          // End of product swipe, show results
+          setViewMode('results');
+          const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const msgData = {
+            role: 'ai',
+            content: '收到你的喜好偏好啦！根据你刚才右滑的单品，这是为你精准匹配的最佳组合推荐。',
+            time,
+            action: 'show_results'
+          };
 
-      const loadingId = Date.now();
-      setMessages(prev => [...prev, { id: loadingId, role: 'ai', content: 'AI 正在生成专属推荐...', isLoading: true }]);
+          const loadingId = Date.now();
+          setMessages(prev => [...prev, { id: loadingId, role: 'ai', content: 'AI 正在生成专属推荐...', isLoading: true }]);
 
-      api.sendChatMessage(msgData).then(saved => {
-        setMessages(prev => prev.map(m => m.id === loadingId ? saved : m));
-      }).catch(console.error);
+          api.sendChatMessage(msgData).then(saved => {
+            setMessages(prev => prev.map(m => m.id === loadingId ? saved : m));
+          }).catch(console.error);
+      }
     }
   };
 
@@ -160,34 +202,30 @@ export function Styling({ products, onAddToCart }: StylingProps) {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const userMsg = { role: 'user', content: text, time };
 
-    // Optimistic UI update
     const tempId = Date.now();
     setMessages(prev => [...prev, { ...userMsg, id: tempId }]);
     setInput("");
 
-    // Add loading AI message
     const loadingId = tempId + 1;
     setMessages(prev => [...prev, { id: loadingId, role: 'ai', content: 'AI 正在思考...', isLoading: true }]);
 
     try {
-      // Add user message & Get AI response
       const response = await api.sendChatMessage(userMsg);
-
       let aiContent = response.aiMessage ? response.aiMessage.content : '';
-      let needsSwipe = false;
-
-      // Clean up the action prompt from model text if it accidentally included it
-      if (aiContent.includes('action: "start_swipe"')) {
-        aiContent = aiContent.replace(/action:\s*"start_swipe"/g, '');
-        needsSwipe = true;
-      } else if (aiContent.includes('start_swipe')) {
-        aiContent = aiContent.replace(/start_swipe/g, '');
-        needsSwipe = true;
+      
+      let intent = null;
+      const jsonMatch = aiContent.match(/```json\n([\s\S]*?)\n```/);
+      if (jsonMatch) {
+          try {
+              intent = JSON.parse(jsonMatch[1]);
+              aiContent = aiContent.replace(/```json\n[\s\S]*?\n```/, '').trim();
+          } catch(e) {}
       }
 
-      if (response.aiMessage) {
-        response.aiMessage.content = aiContent;
-      }
+      // Cleanup legacy prompt
+      if (aiContent.includes('action: "start_swipe"')) aiContent = aiContent.replace(/action:\s*"start_swipe"/g, '');
+
+      if (response.aiMessage) response.aiMessage.content = aiContent;
 
       setMessages(prev => prev.map(m => {
         if (m.id === tempId) return response.userMessage;
@@ -195,8 +233,27 @@ export function Styling({ products, onAddToCart }: StylingProps) {
         return m;
       }));
 
-      if (needsSwipe || (response.aiMessage && response.aiMessage.action === 'start_swipe')) {
-        setTimeout(() => setViewMode('swipe'), 1500);
+      if (intent && intent.main_style) {
+          setCurrentIntent(intent);
+          
+          const subStyleTags = Array.from(new Set(products.filter(p => p.category === intent.main_style).map(p => p.tag)));
+          if (subStyleTags.length > 0) {
+              const cards = subStyleTags.map(tag => {
+                  const firstProduct = products.find(p => p.tag === tag);
+                  return {
+                      id: tag,
+                      name: tag,
+                      image: firstProduct?.image,
+                      isSubStyle: true
+                  };
+              });
+              
+              setSwipeCards(cards);
+              setSwipeIndex(0);
+              setLikedSubStyles([]);
+              setLikedProducts([]);
+              setTimeout(() => setViewMode('sub_style_swipe'), 1500);
+          }
       }
 
     } catch (err) {
@@ -314,7 +371,7 @@ export function Styling({ products, onAddToCart }: StylingProps) {
         {/* Main View (Swipe or Grid) */}
         <div className="flex-1 overflow-y-auto p-8 flex flex-col items-center justify-center min-h-full">
           <AnimatePresence mode="wait">
-            {viewMode === 'swipe' && swipeCards.length > 0 && (
+            {(viewMode === 'sub_style_swipe' || viewMode === 'product_swipe') && swipeCards.length > 0 && (
               <motion.div
                 key="swipe"
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -322,6 +379,10 @@ export function Styling({ products, onAddToCart }: StylingProps) {
                 exit={{ opacity: 0, scale: 0.9 }}
                 className="relative w-full max-w-md aspect-[3/4]"
               >
+                <div className="absolute top-[-40px] left-0 w-full text-center text-gray-500 font-medium tracking-widest text-sm uppercase">
+                    {viewMode === 'sub_style_swipe' ? '1/2 探索风格偏好' : '2/2 挑选具体单品'}
+                </div>
+                
                 <div className="absolute inset-0 bg-gray-200 rounded-3xl transform rotate-3 scale-95 opacity-50" />
                 <div className="absolute inset-0 bg-gray-300 rounded-3xl transform -rotate-2 scale-95 opacity-50" />
 
